@@ -1,4 +1,3 @@
-
 //
 //  Create Score.swift
 //  Retro Snake Game with Sprite2d SwiftUI
@@ -8,57 +7,48 @@
 
 import SpriteKit
 
-// MARK: - Score Label
-
-// An extension lets us add new functionality to GameScene
-// without putting all of the code inside the main GameScene class.
-//
-// This keeps the project organized by separating the score-related
-// code into its own file.
+// An extension keeps the score-related code separate from the main GameScene class.
+// This makes the project easier to organize and understand.
 extension GameScene {
-
-    // Creates the score text that appears on the screen.
+    
+    // Creates the label that displays the player's score.
     func createScoreLabel() {
-
-        // SKLabelNode is a SpriteKit node used to display text.
-        //
-        // We start the label with "Score: 0" because the player
-        // has not eaten any food when a new game begins.
+        
+        // Create a SpriteKit text label and give it the starting text.
         let label = SKLabelNode(text: "Score: 0")
-
-        // Use the font that we defined in GameScene.
-        // In your project, this is "Menlo-Bold".
+        
+        // Use the font defined in GameScene.
         label.fontName = fontName
-
+        
         // Set the size of the score text.
         label.fontSize = 20
-
-        // Set the position of the score label.
+        
+        // Position the score near the top-center of the screen.
+        // frame.midX gives us the horizontal center of the scene.
+        // frame.maxY gives us the top edge of the scene.
         label.position = CGPoint(
-
-            // frame.midX is the horizontal center of the game scene.
-            // This places the score in the middle from left to right.
             x: frame.midX,
-
-            // frame.maxY is the top edge of the game scene.
-            //
-            // We subtract labelOffsetY so that the score is moved
-            // down from the very top of the screen.
             y: frame.maxY - labelOffsetY
         )
-
-        // Save this label in the scoreLabel property of GameScene.
-        //
-        // This is important because we can later change its text
-        // when the player's score increases.
-        //
-        // For example:
-        // scoreLabel.text = "Score: 5"
+        
+        // Save the label in scoreLabel so other parts of the game
+        // can update its text when the player earns points.
         scoreLabel = label
-
-        // Add the score label to gameLayer so SpriteKit
-        // can display it in the game.
+        
+        // Add the score label to the game layer so it appears on screen.
         gameLayer.addChild(scoreLabel)
+    }
+    
+    // Updates the score label's position when the scene size changes.
+    // This is useful when the device changes orientation.
+    func updateScoreLayout() {
+        
+        // Move the score back to the horizontal center of the new scene size.
+        // The ? means this code only runs if scoreLabel actually exists.
+        scoreLabel?.position = CGPoint(
+            x: frame.midX,
+            y: frame.maxY - labelOffsetY
+        )
     }
 }
 

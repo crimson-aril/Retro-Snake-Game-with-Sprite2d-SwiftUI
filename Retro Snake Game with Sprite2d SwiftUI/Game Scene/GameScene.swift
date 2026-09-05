@@ -1,3 +1,4 @@
+
 //
 //  GameScene.swift
 //  Retro Snake Game with Sprite2d SwiftUI
@@ -7,543 +8,371 @@
 
 import SpriteKit
 
-// GameScene is the main scene where our Snake game lives.
-//
-// SKScene:
-// Represents a 2D game world in SpriteKit.
-//
-// SKPhysicsContactDelegate:
-// Allows this scene to receive notifications when two physics bodies
-// collide with each other.
+// The main game scene.
+// This class controls the Snake game and handles physics collisions.
 class GameScene: SKScene, SKPhysicsContactDelegate {
-
-// A container node for the objects that belong to our game.
-//
-// SKNode is a basic node that can contain other nodes.
-// Putting game objects inside gameLayer makes it easier to
-// organize and reset the game.
-var gameLayer = SKNode()
-
-// Stores all the snake's body parts.
-//
-// [SKShapeNode] means this is an Array containing SKShapeNode objects.
-// The first element (index 0) is the snake's head.
-var snake: [SKShapeNode] = []
-
-// Controls the direction in which the snake moves.
-//
-// CGVector contains an X and Y value.
-//
-// dx: 1, dy: 0 means:
-// Move to the right.
-//
-// dx: 0, dy: 1 would mean:
-// Move upward.
-var direction: CGVector = .init(dx: 1, dy: 0)
-
-// Keeps track of whether the game has ended.
-//
-// false = game is still running
-// true  = game is over
-var isGameOver = false
-
-// Stores the player's current score.
-var score = 0
-
-// The label displayed on the screen that shows the score.
-//
-// The ! means this property is an implicitly unwrapped optional.
-// We are telling Swift:
-// "This will be assigned before I actually use it."
-var scoreLabel: SKLabelNode!
-
-// The size of one grid cell in the Snake game.
-//
-// Snake movement is based on a grid, so each movement is
-// approximately one cellSize at a time.
-let cellSize: CGFloat = 20.0
-
-// Font used by our text labels.
-let fontName: String = "Menlo-Bold"
-
-// Controls how far the score label is positioned vertically.
-let labelOffsetY: CGFloat = 100.0
-
-// The fruit/food currently displayed in the game.
-//
-// SKSpriteNode is a node that displays an image.
-var food: SKSpriteNode!
-
-// Button used to turn sound on and off.
-var soundButton: SKLabelNode!
-
-// Controls whether sound effects are enabled.
-//
-// true  = sound is enabled
-// false = sound is disabled
-var isSoundOn = true
-
-// Background music node.
-//
-// Optional (?) means there might not be background music loaded yet.
-var backgroundMusic: SKAudioNode?
-
-// Name of the music file used by the game.
-let musicName = "good-times-halal-beats-vocals"
-
-// Current music volume.
-//
-// Float is a floating-point number.
-// 0.0 = silent
-// 1.0 = maximum volume
-var volume: Float = 0.3
-
-// Sound effect that plays when the snake eats food.
-//
-// SKAction represents an action SpriteKit can perform.
-var eatSoundAction: SKAction!
-
-// Names of the different fruit images we can use.
-//
-// This is an Array of String values.
-let fruits = [
-    "apple",
-    "banana",
-    "pineapple",
-    "strawberry",
-    "watermelon"
-]
-
-// How often the snake should move.
-//
-// 0.15 seconds means the snake moves roughly every 150 milliseconds.
-//
-// private means this property can only be accessed from inside
-// this GameScene class.
-private let moveInterval: TimeInterval = 0.15
-
-// Stores the time when the snake last moved.
-//
-// We use this together with moveInterval to control the
-// snake's movement speed.
-private var lastMoveTime: TimeInterval = 0
-
-
-// MARK: - Scene Setup
-
-// didMove(to:) is called automatically by SpriteKit when this
-// scene has been presented by an SKView.
-//
-// This is a common place to perform initial game setup.
-override func didMove(to view: SKView) {
-
-    // Make the scene background transparent.
-    //
-    // This can be useful when the SwiftUI view behind the
-    // SpriteKit scene provides the actual background.
-    self.backgroundColor = .clear
-
-    // Set up swipe gestures for controlling the snake.
-    createSwipeGestures(view: view)
-
-    // Configure the physics system.
-    setupPhysics()
-
-    // Add our gameLayer to the scene.
-    //
-    // A node does not appear in the scene until it is added
-    // to another node that is already part of the scene.
-    addChild(gameLayer)
-
-    // Create the initial game objects.
-    setupGame()
-
-
-    // Load the sound effect away from the main thread.
-    //
-    // The main thread is responsible for UI and game interaction.
-    // Doing potentially expensive work somewhere else can help
-    // keep the game responsive.
-    DispatchQueue.global(qos: .utility).async { [weak self] in
-
-        // weak self prevents this background closure from keeping
-        // GameScene alive unnecessarily.
-        //
-        // If GameScene no longer exists, simply stop here.
-        guard let self = self else { return }
-
-        // Create the action that will play our eating sound.
-        //
-        // waitForCompletion: false means SpriteKit does not need
-        // to wait for the sound to finish before continuing.
-        let action = SKAction.playSoundFileNamed(
-            "eat.mp3",
-            waitForCompletion: false
-        )
-
-        // Return to the main thread before updating game state.
-        DispatchQueue.main.async {
-
-            // Store the prepared sound action so we can use it later.
-            self.eatSoundAction = action
-
-            // Start setting up the background music.
-            self.setupBackgroundMusic()
-        }
-    }
-}
-
-
-// MARK: - Game Loop
-
-// SpriteKit automatically calls update() once per frame.
-//
-// currentTime is the amount of time associated with the current
-// frame. We can use it to control things that should happen
-// at a specific time interval.
-override func update(_ currentTime: TimeInterval) {
-
-    // If the game is over, don't move the snake.
-    guard !isGameOver else { return }
-
-    // Check whether enough time has passed since the last movement.
-    //
-    // Example:
-    // currentTime - lastMoveTime
-    // tells us how many seconds have passed since the snake moved.
-    if currentTime - lastMoveTime > moveInterval {
-
-        // Move the snake one grid step.
-        moveSnake()
-
-        // Remember the time of this movement.
-        lastMoveTime = currentTime
-    }
-}
-
-
-// MARK: - Physics Collision
-
-// SpriteKit calls didBegin() automatically when two physics bodies
-// begin touching each other.
-//
-// contact contains information about the two objects that collided.
-func didBegin(_ contact: SKPhysicsContact) {
-
-    // Make sure the snake has a head.
-    //
-    // snake.first returns the first element of the array.
-    // Because it might not exist, it is optional.
-    guard let head = snake.first else { return }
-
-    // Get the collision category of each physics body.
-    //
-    // categoryBitMask tells us what type of object something is.
-    let bodyA = contact.bodyA.categoryBitMask
-    let bodyB = contact.bodyB.categoryBitMask
-
-
-    // A small helper function that checks whether two collision
-    // categories collided.
-    //
-    // We check both orders because SpriteKit could give us:
-    //
-    // head + food
-    //
-    // or:
-    //
-    // food + head
-    //
-    // Both should count as the same collision.
-    func isCollision(_ a: UInt32, _ b: UInt32) -> Bool {
-
-        return (bodyA == a && bodyB == b) ||
-               (bodyA == b && bodyB == a)
-    }
-
-
-    // Check whether the snake's head hit:
-    //
-    // 1. Its own body
-    // 2. A wall
-    //
-    // Either collision ends the game.
-    let headBodyOrWallCollision = isCollision(
-        PhysicsCategory.head,
-        PhysicsCategory.body
-    ) || isCollision(
-        PhysicsCategory.head,
-        PhysicsCategory.wall
-    )
-
-
-    // If the snake hit itself or a wall, end the game.
-    if headBodyOrWallCollision {
-        gameOver()
-    }
-
-
-    // Check whether the snake's head touched the food.
-    let headFoodCollision = isCollision(
-        PhysicsCategory.head,
-        PhysicsCategory.food
-    )
-
-
-    // If the snake ate the food...
-    if headFoodCollision {
-
-        // Increase the player's score by 1.
-        score += 1
-
-        // Update the score label on the screen.
-        //
-        // \(score) is Swift string interpolation.
-        // It inserts the value of score into the String.
-        scoreLabel.text = "Score: \(score)"
-
-        // Remove the old food and create new food.
-        spawnFood()
-
-        // Create a particle effect where the food was eaten.
-        spawnParticle(at: head.position)
-
-        // Temporarily change the head's fill color.
-        head.fillColor = .green
-
-        // Apply the shader effect to the snake head.
-        setBodyShader(part: head)
-
-        // Add another segment to the snake.
-        //
-        // computeNextHeadPosition() calculates where the new
-        // segment should be placed.
-        addSnakeHead(at: computeNextHeadPosition())
-
-
-        // Play the eating sound if sound is enabled.
-        if isSoundOn {
-            run(eatSoundAction)
-        }
-    }
-}
-
-
-// MARK: - Cross-Platform Input Handling
-
-// The actual restart logic is kept in its own function.
-//
-// This is useful because iOS and macOS use different input APIs,
-// but both platforms can call this same function.
-private func handleGameRestart() {
-
-    // Only restart if the game has actually ended.
-    if isGameOver {
+    
+    // A separate node used to hold most of the game's objects.
+    // This makes it easier to clear and rebuild the game.
+    var gameLayer = SKNode()
+    
+    // Stores all parts of the snake.
+    // The first item in the array is the snake's head.
+    var snake: [SKShapeNode] = []
+    
+    // Controls the direction in which the snake moves.
+    // dx = horizontal movement, dy = vertical movement.
+    var direction: CGVector = .init(dx: 1, dy: 0)
+    
+    // Keeps track of whether the game has ended.
+    var isGameOver = false
+    
+    // The player's current score.
+    var score = 0
+    
+    // Label used to display the score on the screen.
+    var scoreLabel: SKLabelNode!
+    
+    // The size of one grid cell.
+    // The snake moves one cell at a time.
+    let cellSize: CGFloat = 20.0
+    
+    // Font used for the game's text and buttons.
+    let fontName: String = "Menlo-Bold"
+    
+    // Controls how far the labels are placed from the top of the screen.
+    let labelOffsetY: CGFloat = 100.0
+    
+    // The fruit that the snake needs to eat.
+    var food: SKSpriteNode!
+    
+    // The button used to turn sound on and off.
+    var soundButton: SKLabelNode!
+    
+    // Stores whether game sounds are currently enabled.
+    var isSoundOn = true
+    
+    // The node responsible for playing background music.
+    var backgroundMusic: SKAudioNode?
+    
+    // Name of the background music file.
+    let musicName = "good-times-halal-beats-vocals"
+    
+    // Current music volume.
+    // Float values for volume normally range from 0.0 to 1.0.
+    var volume: Float = 0.3
+    
+    // The sound effect played when the snake eats food.
+    var eatSoundAction: SKAction!
+    
+    // Names of the fruit images that can randomly appear.
+    let fruits = ["apple","banana","pineapple","strawberry","watermelon"]
+    
+    // Time between snake movements.
+    // "private" means only this class can access the variable.
+    private let moveInterval: TimeInterval = 0.15
+    
+    // Stores the time when the snake last moved.
+    private var lastMoveTime: TimeInterval = 0
+    
+    // Called automatically when the scene is added to an SKView.
+    // This is where the game is initially prepared.
+    override func didMove(to view: SKView) {
+        
+        // Make the SpriteKit scene background transparent.
+        self.backgroundColor = .clear
+        
+        // Add swipe controls for iPhone/iPad.
+        createSwipeGestures(view: view)
+        
+        // Set up the physics system and collision detection.
+        setupPhysics()
+        
+        // Add the main game layer to the scene.
+        addChild(gameLayer)
+        
+        // Create the initial game objects.
         setupGame()
-    }
-}
-
-
-// Handle buttons that the player clicks/taps.
-//
-// location tells us where the player interacted with the scene.
-private func handleButtonTap(at location: CGPoint) {
-
-    // Find the SpriteKit node located at the given point.
-    let node = atPoint(location)
-
-
-    // Check which button was clicked.
-    //
-    // node.name is a String identifying the node.
-    switch node.name {
-
-    // The sound button was clicked.
-    case "soundButton":
-
-        // Toggle the Boolean value.
-        //
-        // true becomes false.
-        // false becomes true.
-        isSoundOn.toggle()
-
-        // Change the button icon based on the current state.
-        soundButton.text = isSoundOn ? "🔊" : "🔇"
-
-
-        // Choose the target volume.
-        //
-        // If sound is on, use the current volume.
-        // If sound is off, use 0.0.
-        let targetVolume: Float = isSoundOn ? volume : 0.0
-
-        // Smoothly change the background music volume.
-        backgroundMusic?.run(
-            SKAction.changeVolume(
-                to: targetVolume,
-                duration: 0.1
+        
+        // Load the eating sound in the background.
+        // This helps avoid doing the work on the main UI thread.
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            
+            // Safely get the GameScene object.
+            // If it no longer exists, stop here.
+            guard let self = self else { return }
+            
+            // Create the sound effect action.
+            let action = SKAction.playSoundFileNamed(
+                "eat.mp3",
+                waitForCompletion: false
             )
-        )
-
-
-    // The minus volume button was clicked.
-    case "minusButton":
-
-        // Decrease the volume by 0.1.
-        //
-        // max() prevents the value from going below 0.0.
-        volume = max(0.0, volume - 0.1)
-
-        // Apply the new volume.
-        backgroundMusic?.run(
-            SKAction.changeVolume(
-                to: volume,
-                duration: 0.1
-            )
-        )
-
-
-    // The plus volume button was clicked.
-    case "plusButton":
-
-        // Increase the volume by 0.1.
-        //
-        // min() prevents the value from going above 1.0.
-        volume = min(1.0, volume + 0.1)
-
-        // Apply the new volume.
-        backgroundMusic?.run(
-            SKAction.changeVolume(
-                to: volume,
-                duration: 0.1
-            )
-        )
-
-
-    // The player clicked/tapped something that isn't one
-    // of our buttons.
-    default:
-        break
+            
+            // SpriteKit UI-related work should happen on the main thread.
+            DispatchQueue.main.async {
+                self.eatSoundAction = action
+                
+                // Start setting up the background music.
+                self.setupBackgroundMusic()
+            }
+        }
     }
-}
-
-
-// MARK: - iOS Input
-
-// This code is compiled only when building for iOS.
-#if os(iOS)
-
-// Called when the player touches the screen.
-override func touchesBegan(
-    _ touches: Set<UITouch>,
-    with event: UIEvent?
-) {
-
-    // Check whether the game should restart.
-    handleGameRestart()
-}
-
-
-// Called when the player removes their finger from the screen.
-override func touchesEnded(
-    _ touches: Set<UITouch>,
-    with event: UIEvent?
-) {
-
-    // Get the first touch.
-    //
-    // A Set can contain multiple touches, so first is optional.
-    guard let touch = touches.first else { return }
-
-    // Convert the touch location into a position inside
-    // our SpriteKit scene.
-    let location = touch.location(in: self)
-
-    // Check whether the player tapped one of our buttons.
-    handleButtonTap(at: location)
-}
-
-
-// MARK: - macOS Input
-
-// This code is compiled only when building for macOS.
-#elseif os(macOS)
-
-// Called when the user clicks the mouse.
-override func mouseDown(with event: NSEvent) {
-
-    // Check whether the game should restart.
-    handleGameRestart()
-
-    // Get the mouse position inside the SpriteKit scene.
-    let location = event.location(in: self)
-
-    // Check whether the user clicked one of our buttons.
-    handleButtonTap(at: location)
-}
-
-
-// Called when the user presses a keyboard key.
-override func keyDown(with event: NSEvent) {
-
-    // Don't allow movement when the game is over.
-    guard !isGameOver else { return }
-
-
-    // Check which keyboard key was pressed.
-    //
-    // keyCode is a numeric code representing the physical key.
-    //
-    // We support both:
-    // Arrow keys
-    // WASD keys
-    switch event.keyCode {
-
-
-    // Up Arrow or W
-    case 126, 13:
-
-        // Only allow moving vertically if we're not already
-        // moving vertically.
-        //
-        // This prevents the snake from immediately reversing
-        // direction into itself.
-        if direction.dy == 0 {
-            direction = .init(dx: 0, dy: 1)
+    
+    // Called repeatedly by SpriteKit while the game is running.
+    // currentTime contains the current game time.
+    override func update(_ currentTime: TimeInterval) {
+        
+        // Stop updating the snake if the game is over.
+        guard !isGameOver else { return }
+        
+        // Check whether enough time has passed since the last movement.
+        if currentTime - lastMoveTime > moveInterval {
+            
+            // Move the snake one grid cell.
+            moveSnake()
+            
+            // Remember the time of this movement.
+            lastMoveTime = currentTime
         }
-
-
-    // Down Arrow or S
-    case 125, 1:
-
-        if direction.dy == 0 {
-            direction = .init(dx: 0, dy: -1)
-        }
-
-
-    // Left Arrow or A
-    case 123, 0:
-
-        if direction.dx == 0 {
-            direction = .init(dx: -1, dy: 0)
-        }
-
-
-    // Right Arrow or D
-    case 124, 2:
-
-        if direction.dx == 0 {
-            direction = .init(dx: 1, dy: 0)
-        }
-
-
-    // Any other key.
-    default:
-        break
     }
-}
-
-// End of the macOS-only code.
-#endif
-
+    
+    // Called automatically by SpriteKit when two physics bodies begin touching.
+    // This is how the game detects the snake hitting food, its body, or a wall.
+    func didBegin(_ contact: SKPhysicsContact) {
+        
+        // Get the snake's head.
+        // If there is no head, there is nothing to check.
+        guard let head = snake.first else { return }
+        
+        // Get the category of the first object involved in the collision.
+        let bodyA = contact.bodyA.categoryBitMask
+        
+        // Get the category of the second object involved in the collision.
+        let bodyB = contact.bodyB.categoryBitMask
+        
+        // Helper function that checks whether two physics categories collided.
+        // The order of the two bodies does not matter.
+        func isCollision(_ a: UInt32, _ b: UInt32) -> Bool {
+            (bodyA == a && bodyB == b) || (bodyA == b && bodyB == a)
+        }
+        
+        // Check whether the snake's head hit:
+        // 1. Another part of the snake's body
+        // 2. The wall
+        let headBodyOrWallCollision = isCollision(
+            PhysicsCategory.head, PhysicsCategory.body
+        ) || isCollision(
+            PhysicsCategory.head, PhysicsCategory.wall
+        )
+        
+        // If the head hit the body or wall, end the game.
+        if headBodyOrWallCollision {
+            gameOver()
+        }
+        
+        // Check whether the snake's head touched the food.
+        let headFoodCollision = isCollision(
+            PhysicsCategory.head,
+            PhysicsCategory.food
+        )
+        
+        if headFoodCollision {
+            
+            // Increase the score by one.
+            score += 1
+            
+            // Update the score displayed on the screen.
+            scoreLabel.text = "Score: \(score)"
+            
+            // Remove the old food and create new food.
+            spawnFood()
+            
+            // Create the particle effect where the food was eaten.
+            spawnParticle(at: head.position)
+            
+            // Change the head's color to green.
+            head.fillColor = .green
+            
+            // Apply the green shader to the head.
+            setBodyShader(part: head)
+            
+            // Add another snake part.
+            addSnakeHead(at: computeNextHeadPosition())
+            
+            // Only play the eating sound when sound is enabled.
+            if isSoundOn {
+                run(eatSoundAction)
+            }
+        }
+    }
+    
+    // Handles restarting the game after Game Over.
+    private func handleGameRestart() {
+        
+        // Only restart if the game is currently over.
+        if isGameOver {
+            setupGame()
+        }
+    }
+    
+    // Checks whether the player tapped one of the game buttons.
+    private func handleButtonTap(at location: CGPoint) {
+        
+        // Find the SpriteKit node located at the tap position.
+        let node = atPoint(location)
+        
+        // Check the name of the node that was tapped.
+        switch node.name {
+            
+        // Sound button was tapped.
+        case "soundButton":
+            
+            // Change true to false, or false to true.
+            isSoundOn.toggle()
+            
+            // On the Simulator, use text instead of emoji.
+            // This avoids problems when the simulator cannot display emoji.
+            #if targetEnvironment(simulator)
+            soundButton.text = isSoundOn ? "Sound On" : "Sound Off"
+            #else
+            
+            // On a real device, use the speaker emoji.
+            soundButton.text = isSoundOn ? "🔉" : "🔇"
+            #endif
+            
+            // Turn the music volume on or off.
+            let targetVolume: Float = isSoundOn ? volume : 0.0
+            
+            // Smoothly change the background music volume.
+            backgroundMusic?.run(
+                SKAction.changeVolume(to: targetVolume, duration: 0.1)
+            )
+            
+        // Minus button was tapped.
+        case "minusButton":
+            
+            // Lower the volume by 0.1.
+            // max() prevents the volume from going below 0.
+            volume = max(0.0, volume - 0.1)
+            
+            // Apply the new volume.
+            backgroundMusic?.run(
+                SKAction.changeVolume(to: volume, duration: 0.1)
+            )
+            
+        // Plus button was tapped.
+        case "plusButton":
+            
+            // Increase the volume by 0.1.
+            // min() prevents the volume from going above 1.0.
+            volume = min(1.0, volume + 0.1)
+            
+            // Apply the new volume.
+            backgroundMusic?.run(
+                SKAction.changeVolume(to: volume, duration: 0.1)
+            )
+            
+        // Nothing recognized was tapped.
+        default:
+            break
+        }
+    }
+    
+    // Called when the size of the scene changes.
+    // This is especially useful when an iPhone changes orientation.
+    override func didChangeSize(_ oldSize: CGSize) {
+        
+        // Rebuild the grid using the new scene size.
+        setupGrid()
+        
+        // Move the buttons to their new positions.
+        updateButtonLayout()
+        
+        // Move the score label to its new position.
+        updateScoreLayout()
+        
+        // Rebuild the physics wall so it matches the new scene size.
+        setupPhysics()
+    }
+    
+    // iOS-specific touch controls.
+    #if os(iOS)
+    
+    // Called when the player first touches the screen.
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        
+        // If the game is over, touching the screen restarts it.
+        handleGameRestart()
+    }
+    
+    // Called when the player removes their finger from the screen.
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        
+        // Get the first touch.
+        // If there isn't one, stop here.
+        guard let touch = touches.first else { return }
+        
+        // Convert the touch location into the scene's coordinate system.
+        let location = touch.location(in: self)
+        
+        // Check whether the player tapped a button.
+        handleButtonTap(at: location)
+    }
+    
+    // macOS-specific controls.
+    #elseif os(macOS)
+    
+    // Called when the user clicks the mouse.
+    override func mouseDown(with event: NSEvent) {
+        
+        // Restart the game if it is over.
+        handleGameRestart()
+        
+        // Get the mouse position inside the scene.
+        let location = event.location(in: self)
+        
+        // Check whether a button was clicked.
+        handleButtonTap(at: location)
+    }
+    
+    // Called when the user presses a keyboard key.
+    override func keyDown(with event: NSEvent) {
+        
+        // Do not allow movement while the game is over.
+        guard !isGameOver else { return }
+        
+        // Check which keyboard key was pressed.
+        switch event.keyCode {
+            
+        // Up arrow key.
+        case 126, 13:
+            if direction.dy == 0 {
+                direction = .init(dx: 0, dy: 1)
+            }
+            
+        // Down arrow key.
+        case 125, 1:
+            if direction.dy == 0 {
+                direction = .init(dx: 0, dy: -1)
+            }
+            
+        // Left arrow key.
+        case 123, 0:
+            if direction.dx == 0 {
+                direction = .init(dx: -1, dy: 0)
+            }
+            
+        // Right arrow key.
+        case 124, 2:
+            if direction.dx == 0 {
+                direction = .init(dx: 1, dy: 0)
+            }
+            
+        // Ignore other keys.
+        default:
+            break
+        }
+    }
+    
+    #endif
 }

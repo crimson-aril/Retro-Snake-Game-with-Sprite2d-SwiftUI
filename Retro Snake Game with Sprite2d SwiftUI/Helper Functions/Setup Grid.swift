@@ -6,126 +6,89 @@
 //  Created by noor on 4/9/26.
 //
 
-// Foundation provides basic Swift functionality and types.
 import Foundation
-
-// SpriteKit provides the game nodes and drawing tools
-// used to create the grid.
 import SpriteKit
 
-
-// MARK: - Grid Setup
-
-// Add grid-related functionality to GameScene.
-//
-// An extension allows us to keep the grid code in its own file
-// instead of putting everything into GameScene.swift.
+// An extension keeps the grid-related code separate from the main GameScene class.
 extension GameScene {
-
-    // Creates the grid that appears behind the snake.
+    
+    // Creates the grid that appears in the background of the game.
     func setupGrid() {
-
-        // SKNode is a container node.
-        //
-        // We can add all of the grid lines to this node,
-        // then add the whole grid to the game at once.
+        
+        // Remove the old grid before creating a new one.
+        // This is important when the screen size changes, such as during rotation.
+        gameLayer.childNode(withName: "gridNode")?.removeFromParent()
+        
+        // Create a node that will contain all of the grid lines.
         let gridNode = SKNode()
-
+        
+        // Give the node a name so we can find and remove it later.
+        gridNode.name = "gridNode"
+        
         // Put the grid behind the other game objects.
-        //
-        // Nodes with a lower zPosition are drawn behind nodes
-        // with a higher zPosition.
+        // A lower zPosition appears behind objects with a higher zPosition.
         gridNode.zPosition = -1
-
-
-        // MARK: - Vertical Lines
-
-        // Create vertical lines across the screen.
-        //
-        // stride(from:to:by:) generates values starting at 0
-        // and increasing by cellSize until reaching size.width.
-        //
-        // For example, if cellSize is 20:
-        //
-        // 0, 20, 40, 60, 80, ...
+        
+        // Create the vertical grid lines.
+        // stride() repeatedly increases x by cellSize until it reaches the scene width.
         for x in stride(from: 0, to: size.width, by: cellSize) {
-
-            // CGMutablePath is used to create a drawable path.
+            
+            // Create an empty path that will describe the line.
             let path = CGMutablePath()
-
-            // Start the path at the bottom of the screen.
+            
+            // Set the starting point at the bottom of the scene.
             path.move(to: CGPoint(x: x, y: 0))
-
-            // Draw the path upward to the top of the screen.
-            //
-            // Because the x value stays the same, this creates
-            // a vertical line.
+            
+            // Draw the line from the bottom to the top of the scene.
             path.addLine(to: CGPoint(x: x, y: size.height))
-
-            // Create an SKShapeNode using the path we just created.
-            //
-            // SKShapeNode can draw lines, shapes, and paths.
+            
+            // Create a visible SpriteKit shape from the path.
             let line = SKShapeNode(path: path)
-
-            // Make the line white.
+            
+            // Make the grid line white.
             line.strokeColor = .white
-
-            // Make the line partially transparent.
-            //
-            // 0.0 = completely invisible
-            // 1.0 = completely opaque
+            
+            // Make the line partially transparent so it does not overpower the game.
             line.alpha = 0.3
-
-            // Set the thickness of the line.
+            
+            // Set the thickness of the grid line.
             line.lineWidth = 1
-
-            // Add the vertical line to the grid container.
+            
+            // Add this vertical line to the grid node.
             gridNode.addChild(line)
         }
-
-
-        // MARK: - Horizontal Lines
-
-        // Create horizontal lines across the screen.
-        //
-        // The loop works the same way as the vertical-line loop,
-        // but this time we increase the y coordinate.
+        
+        // Create the horizontal grid lines.
+        // stride() increases y by cellSize until it reaches the scene height.
         for y in stride(from: 0, to: size.height, by: cellSize) {
-
-            // Create a new path for this horizontal line.
+            
+            // Create an empty path for the horizontal line.
             let path = CGMutablePath()
-
-            // Start at the left side of the screen.
+            
+            // Set the starting point at the left side of the scene.
             path.move(to: CGPoint(x: 0, y: y))
-
-            // Draw the path to the right side of the screen.
-            //
-            // Because the y value stays the same, this creates
-            // a horizontal line.
+            
+            // Draw the line from the left side to the right side.
             path.addLine(to: CGPoint(x: size.width, y: y))
-
-            // Turn the path into an SKShapeNode so SpriteKit
-            // can display it.
+            
+            // Create a visible SpriteKit shape from the path.
             let line = SKShapeNode(path: path)
-
-            // Make the line white.
+            
+            // Make the grid line white.
             line.strokeColor = .white
-
-            // Make it partially transparent.
+            
+            // Make the line partially transparent.
             line.alpha = 0.3
-
-            // Set the line thickness.
+            
+            // Set the thickness of the grid line.
             line.lineWidth = 1
-
-            // Add the horizontal line to the grid container.
+            
+            // Add this horizontal line to the grid node.
             gridNode.addChild(line)
         }
-
-
-        // Add the completed grid to the game's main layer.
-        //
-        // At this point all vertical and horizontal lines are
-        // inside gridNode, so adding gridNode displays the entire grid.
+        
+        // Add the completed grid to the game layer so it appears on screen.
         gameLayer.addChild(gridNode)
     }
 }
+
