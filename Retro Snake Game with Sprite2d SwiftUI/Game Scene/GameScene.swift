@@ -56,7 +56,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     var backgroundMusic: SKAudioNode?
     
     // Name of the background music file.
-    let musicName = "good-times-halal-beats-vocals"
+    let musicName = ""
     
     // Current music volume.
     // Float values for volume normally range from 0.0 to 1.0.
